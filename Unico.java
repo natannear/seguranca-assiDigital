@@ -3,6 +3,7 @@ package prototipo;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Paths;
 import java.security.InvalidKeyException;
 import java.security.KeyFactory;
@@ -40,14 +41,22 @@ public class Unico {
 		
 		sig.initSign(priKey);
 		
-		sig.update(Files.readAllBytes(arquivo.toPath()));
-		byte[] assinaturaDigital = sig.sign();
+		try {
+			sig.update(Files.readAllBytes(arquivo.toPath()));
+			byte[] assinaturaDigital = sig.sign();
+			
+			String nomeDoArquivoLimpo = tirarExtensao(arquivo.getName());
+			
+			byte[] key = pubKey.getEncoded();
+			Files.write(Paths.get("chave_publica_"+nomeDoArquivoLimpo), key);
+			Files.write(Paths.get("assinatura_digital_" + nomeDoArquivoLimpo), assinaturaDigital);
+			
+			System.out.println("Documento assinado com sucesso.");
+			
+		} catch (NoSuchFileException e) {
+			System.out.println("Arquivo não encontrado!");
+		}
 		
-		String nomeDoArquivoLimpo = tirarExtensao(arquivo.getName());
-		
-		byte[] key = pubKey.getEncoded();
-		Files.write(Paths.get("chave_publica"), key);
-		Files.write(Paths.get("assinatura_digital_" + nomeDoArquivoLimpo), assinaturaDigital);
 	}
 	
 	public static void verificarAssinatura(PublicKey pubKey, File arquivo, byte[] assinatura) throws
@@ -56,15 +65,21 @@ public class Unico {
 		Signature clientSig = Signature.getInstance("SHA256withRSA");
 		
 		clientSig.initVerify(pubKey);
-		clientSig.update(Files.readAllBytes(arquivo.toPath()));
 		
-		if(clientSig.verify(assinatura)) { // Mensagem corretamente assinada
-			System.out.println("O Arquivo recebido foi assinado corretamente.");
-			//java.awt.Desktop.getDesktop().open(arquivo);
+		try {
+			clientSig.update(Files.readAllBytes(arquivo.toPath()));
+			
+			if(clientSig.verify(assinatura)) { // Mensagem corretamente assinada
+				System.out.println("O Arquivo recebido foi assinado corretamente.");
+				//java.awt.Desktop.getDesktop().open(arquivo);
+			}
+			else { // Mensagem não pode ser validada
+				System.out.println("O Arquivo recebido NÃO pode ser validado.");
+			}
+		} catch (NullPointerException | NoSuchFileException e) {
+			System.out.println("O Arquivo recebido NÃO pode ser validado.");
 		}
-		else { // Mensagem não pode ser validada
-			System.out.println("O Arquivo recebido NÃO pode ser validada.");
-		}
+		
 	}
 	
 	public static String tirarExtensao(String nome) {
@@ -93,24 +108,29 @@ public class Unico {
 				switch(escolha) {
 				case 1:
 					in = new Scanner(System.in);
-					System.out.println("Digite o nome do documento e sua extensão[Arquivo tem que está presente na raiz do Projeto]: ");
+					System.out.println("Digite o nome do documento e sua extensão[Arquivo precisa estar na raiz do Projeto]: ");
 					String nomeDoArquivo = in.nextLine();
 					File arquivo = new File(nomeDoArquivo);
 					
 					gerarAssinatura(arquivo);
-					System.out.println("Documento assinado com sucesso.");
 					
 					break;
 				case 2:
 					in = new Scanner(System.in);
-					System.out.println("Digite o nome do documento e sua extensão[Arquivo tem que está presente na raiz do Projeto]: ");
+					System.out.println("Digite o nome do documento e sua extensão[Arquivo precisa estar na raiz do Projeto]: ");
 					String nome = in.nextLine();
 					
 					arquivo = new File(nome);
 					nome = tirarExtensao(nome);
+					byte[] assinaturaDigital = null;
 					
-					byte[] assinaturaDigital = Files.readAllBytes(Paths.get("assinatura_digital_" + nome));
-					byte[] key = Files.readAllBytes(Paths.get("chave_publica"));
+					try {
+						assinaturaDigital = Files.readAllBytes(Paths.get("assinatura_digital_" + nome));
+					} catch (NoSuchFileException e) {
+						System.out.println("Arquivo não encontrado!");
+						break;
+					}
+					byte[] key = Files.readAllBytes(Paths.get("chave_publica_"+nome));
 					PublicKey chavePublica = recuperaChavePublica(key);
 					
 					verificarAssinatura(chavePublica, arquivo, assinaturaDigital);
